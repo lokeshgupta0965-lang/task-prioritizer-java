@@ -1,15 +1,17 @@
 package com;
 
+import com.taskmanager.service.TaskPriorityService;
+
 import java.util.List;
 
 public class Solution {
 
-	public static void main(String[] args) {
-			
-		Task[] tasks = new Task[20];
-		long now = 1_600_000_000L; // base createdAt
-		
-		int i = 0;
+    public static void main(String[] args) {
+
+        Task[] tasks = new Task[20];
+        long now = 1_600_000_000L; // base createdAt
+
+        int i = 0;
         // ----- Eligible tasks (we intend these to appear in output in the order below) -----
         // 1) Id 2: earliest due date -> should be first
         tasks[i++] = new Task(2, "Should be 1st", false, "2026-10-01", -1, "", false, now + 100);
@@ -70,11 +72,17 @@ public class Solution {
                 "Task ID: 0, Description: Zero parent",
                 "Task ID: 11, Description: Child of zero, parent: Zero parent"
         );
-			
-		
-		TaskPriorityService taskPriorityService = new TaskPriorityService(tasks);
-		
-		taskPriorityService.printPrioritizedTasks();
-	}
-	
+
+
+        TaskPriorityService taskPriorityService = new TaskPriorityService();
+
+        // add tasks one by one using service API
+        for (Task t : tasks) {
+            if (t == null) continue;
+            taskPriorityService.addTask(t);
+        }
+
+        taskPriorityService.printPrioritizedTasks();
+    }
+
 }
