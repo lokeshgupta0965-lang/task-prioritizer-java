@@ -1,5 +1,6 @@
 package com;
 
+import com.taskmanager.model.Task;
 import com.taskmanager.service.TaskPriorityService;
 
 import java.util.List;
@@ -7,82 +8,74 @@ import java.util.List;
 public class Solution {
 
     public static void main(String[] args) {
+        // Build 100+ tasks with 4-level nesting
+        int id = 1;
+        long base = 1_600_000_000L;
 
-        Task[] tasks = new Task[20];
-        long now = 1_600_000_000L; // base createdAt
+        // configuration tuned to produce ~120 tasks
+        int roots = 3;
+        int l1PerRoot = 3;
+        int l2PerL1 = 3;
+        int l3PerL2 = 3;
 
-        int i = 0;
-        // ----- Eligible tasks (we intend these to appear in output in the order below) -----
-        // 1) Id 2: earliest due date -> should be first
-        tasks[i++] = new Task(2, "Should be 1st", false, "2026-10-01", -1, "", false, now + 100);
+        Task[] tasks = new Task[roots * (1 + l1PerRoot * (1 + l2PerL1 * (1 + l3PerL2))) + 20];
+        int idx = 0;
 
-        // 2) Id 1: next earliest due date -> should be second (high priority)
-        tasks[i++] = new Task(1, "Should be 2nd", false, "2026-10-02", -1, "", true, now + 200);
+        for (int r = 0; r < roots; r++) {
+            int rootId = id++;
+            String rootDesc = "Root-" + r;
+            String rootDue = (r % 3 == 0) ? "2026-10-01" : (r % 3 == 1 ? "2026-10-05" : null);
+            boolean rootHigh = (r % 2 == 0);
+            tasks[idx++] = new Task(rootId, rootDesc, false, rootDue, -1, "", rootHigh, base + rootId);
 
-        // 3) Id 10: same due date as id=1, lower priority and later createdAt -> third
-        tasks[i++] = new Task(10, "Should be 3rd", false, "2026-10-02", -1, "", false, now + 300);
+            for (int l1 = 0; l1 < l1PerRoot; l1++) {
+                int idL1 = id++;
+                String descL1 = rootDesc + "-L1-" + l1;
+                String dueL1 = (l1 % 2 == 0) ? "2026-10-03" : null;
+                boolean prioL1 = (l1 % 3 == 0);
+                tasks[idx++] = new Task(idL1, descL1, false, dueL1, rootId, "", prioL1, base + idL1);
 
-        // 4) Id 3: no due date, high priority -> comes after dated tasks
-        tasks[i++] = new Task(3, "Should be 4th", false, "", -1, "", true, now + 400);
+                for (int l2 = 0; l2 < l2PerL1; l2++) {
+                    int idL2 = id++;
+                    String descL2 = descL1 + "-L2-" + l2;
+                    String dueL2 = (l2 == 0) ? "2026-09-30" : null;
+                    boolean prioL2 = (l2 % 2 == 1);
+                    tasks[idx++] = new Task(idL2, descL2, false, dueL2, idL1, "", prioL2, base + idL2);
 
-        // 5) Id 4: no due date, low priority, older than id5 -> should be 5th
-        tasks[i++] = new Task(4, "Should be 5th", false, null, -1, "", false, now + 500);
-
-        // 6) Id 5: child of 4 -> should be 6th and include parent description
-        tasks[i++] = new Task(5, "Should be 6th", false, null, 4, "", false, now + 600);
-
-        // 7) Id 0: Zero parent (no parent), will appear later (older/later createdAt to set order)
-        tasks[i++] = new Task(0, "Zero parent", false, null, -1, "", false, now + 700);
-
-        // 8) Id 11: child of 0 -> should come after 0 and include parent mapping
-        tasks[i++] = new Task(11, "Child of zero", false, null, 0, "", false, now + 800);
-
-        // ----- Other tasks (12 tasks) are ineligible or duplicates so they won't appear -----
-        // Duplicates or ineligible tasks (done/assigned) to reach 20 total
-        tasks[i++] = new Task(6, "Done task", true, "2026-11-01", -1, "", false, now + 10);
-        tasks[i++] = new Task(7, "Assigned task", false, "2026-11-02", -1, "userA", false, now + 20);
-        // Duplicate of an eligible task (same desc + due) - should be skipped
-        tasks[i++] = new Task(8, "Should be 1st", false, "2026-10-01", -1, "", false, now + 30);
-        // Duplicate of t1 (same desc + due) - should be skipped
-        tasks[i++] = new Task(9, "Should be 2nd", false, "2026-10-02", -1, "", true, now + 40);
-        // More done/assigned tasks
-        tasks[i++] = new Task(12, "Some done", true, "", -1, "", false, now + 50);
-        tasks[i++] = new Task(13, "Some assigned", false, "", -1, "someone", false, now + 60);
-        // Duplicates with blank due date for t3 - duplicate should be skipped if present earlier
-        tasks[i++] = new Task(14, "Should be 4th", false, "", -1, "", true, now + 70);
-        // More ineligible
-        tasks[i++] = new Task(15, "Done again", true, "", -1, "", false, now + 80);
-        tasks[i++] = new Task(16, "Assigned again", false, "2026-12-01", -1, "userB", true, now + 90);
-        // Non-conflicting tasks but ineligible (assigned/done)
-        tasks[i++] = new Task(17, "Done 4", true, "2027-01-01", -1, "", false, now + 91);
-        tasks[i++] = new Task(18, "Assigned 4", false, "", -1, "userC", false, now + 92);
-        // Another duplicate to ensure dedupe set works
-        tasks[i++] = new Task(19, "Zero parent", false, "", -1, "", false, now + 93);
-
-        // Build printable output
-
-        // Expected ordering and lines (exact strings)
-        List<String> expected = List.of(
-                "Task ID: 2, Description: Should be 1st",
-                "Task ID: 1, Description: Should be 2nd",
-                "Task ID: 10, Description: Should be 3rd",
-                "Task ID: 3, Description: Should be 4th",
-                "Task ID: 4, Description: Should be 5th",
-                "Task ID: 5, Description: Should be 6th, parent: Should be 5th",
-                "Task ID: 0, Description: Zero parent",
-                "Task ID: 11, Description: Child of zero, parent: Zero parent"
-        );
-
-
-        TaskPriorityService taskPriorityService = new TaskPriorityService();
-
-        // add tasks one by one using service API
-        for (Task t : tasks) {
-            if (t == null) continue;
-            taskPriorityService.addTask(t);
+                    for (int l3 = 0; l3 < l3PerL2; l3++) {
+                        int idL3 = id++;
+                        String descL3 = descL2 + "-L3-" + l3;
+                        String dueL3 = (l3 % 2 == 0) ? "2026-10-02" : null;
+                        boolean prioL3 = (l3 % 2 == 1);
+                        tasks[idx++] = new Task(idL3, descL3, false, dueL3, idL2, "", prioL3, base + idL3);
+                    }
+                }
+            }
         }
 
-        taskPriorityService.printPrioritizedTasks();
-    }
+        // add some extra roots and duplicates and ineligible to exercise filtering
+        for (int k = 0; k < 5; k++) {
+            tasks[idx++] = new Task(id++, "ExtraRoot-" + k, false, null, -1, "", false, base + id);
+        }
+        // duplicates
+        tasks[idx++] = new Task(id++, "Root-0", false, "2026-10-01", -1, "", false, base + id);
+        tasks[idx++] = new Task(id++, "Root-0-L1-0", false, "2026-10-03", 2, "", false, base + id);
+        // ineligible
+        tasks[idx++] = new Task(id++, "Done-Task", true, "2027-01-01", -1, "", false, base + id);
+        tasks[idx++] = new Task(id++, "Assigned-Task", false, "2027-01-02", -1, "userA", false, base + id);
 
+        // trim the array to actual size
+        Task[] input = new Task[idx];
+        System.arraycopy(tasks, 0, input, 0, idx);
+
+        TaskPriorityService svc = new TaskPriorityService();
+        for (Task t : input) {
+            svc.addTask(t);
+        }
+
+        List<String> out = svc.buildPrintableOutput();
+        System.out.println("Printed tasks: " + out.size());
+        // print first 200 lines for inspection
+        for (int i = 0; i < Math.min(out.size(), 200); i++) System.out.println(out.get(i));
+    }
 }
